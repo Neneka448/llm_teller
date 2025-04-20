@@ -35,7 +35,7 @@ class ApiService {
        'X-Title': 'YOUR_APP_NAME', // Replace with your app name
     };
 
-    // --- Apply context limit --- 
+    // --- Apply context limit ---
     List<ChatMessage> messagesToSend = List.from(messages); // Create a mutable copy
      // Pass the system prompt from the conversation (if available) to the formatter
      String? systemPromptForApi = systemPromptOverride; // Allow override if needed
@@ -54,9 +54,9 @@ class ApiService {
 
         // Ensure the first message is kept if it's a system message, even if truncation would remove it
         bool firstIsSystem = messages.isNotEmpty && messages.first.sender == MessageSender.system;
-        
+
         // Always keep system message if present and truncation is happening
-        if (firstIsSystem && startIndex > 0) { 
+        if (firstIsSystem && startIndex > 0) {
              print("[ApiService] Keeping system prompt and last ${maxMessages -1} messages."); // Debug
              // Keep system message + last (maxMessages - 1) user/assistant messages
              messagesToSend = [messages.first, ...messages.sublist(messages.length - (maxMessages - 1))];
@@ -126,7 +126,19 @@ class ApiService {
       }
     } catch (e) {
       print("[ApiService] Error making API request: $e");
-      return "Error: Failed to connect to the API. $e";
+
+      // 提供更友好的错误消息，特别是针对网络问题
+      String errorMessage = "Error: Failed to connect to the API.";
+
+      // 检查是否是网络连接问题
+      if (e.toString().contains("SocketException") ||
+          e.toString().contains("Failed host lookup")) {
+          errorMessage = "网络连接错误：无法连接到 AI 服务器。请检查您的网络连接，确保您可以访问 openrouter.ai。\n\n如果您在中国或其他地区，可能需要使用 VPN 或代理服务器。";
+      } else if (e.toString().contains("timed out")) {
+          errorMessage = "连接超时：服务器响应时间过长。请检查您的网络连接或稍后再试。";
+      }
+
+      return errorMessage;
     }
   }
 
@@ -146,7 +158,7 @@ class ApiService {
       return; // End the stream
     }
 
-    // --- Proceed with Streaming --- 
+    // --- Proceed with Streaming ---
     print("[ApiService] Streaming enabled, proceeding with stream request.");
     final host = prefs.getString('apiHost') ?? 'https://openrouter.ai/api/v1';
     final path = prefs.getString('apiPath') ?? '/chat/completions';
@@ -154,7 +166,7 @@ class ApiService {
     final model = prefs.getString('model') ?? 'gpt-4o';
     final temperature = prefs.getDouble('temperature') ?? 0.7;
     final topP = prefs.getDouble('topP') ?? 1.0;
-    final maxMessages = prefs.getInt('maxMessages'); 
+    final maxMessages = prefs.getInt('maxMessages');
     print("[ApiService] Max messages context limit from settings: $maxMessages");
 
     if (apiKey.isEmpty) {
@@ -168,8 +180,8 @@ class ApiService {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream', // Important for SSE
       'Authorization': 'Bearer $apiKey',
-      'HTTP-Referer': 'YOUR_APP_URL', 
-      'X-Title': 'YOUR_APP_NAME', 
+      'HTTP-Referer': 'YOUR_APP_URL',
+      'X-Title': 'YOUR_APP_NAME',
     };
 
     List<ChatMessage> messagesToSend = List.from(messages);
@@ -181,7 +193,7 @@ class ApiService {
         print("[ApiService] Truncating message history from ${messages.length} to $maxMessages messages.");
         int startIndex = messages.length - maxMessages;
         bool firstIsSystem = messages.isNotEmpty && messages.first.sender == MessageSender.system;
-        if (firstIsSystem && startIndex > 0) { 
+        if (firstIsSystem && startIndex > 0) {
              print("[ApiService] Keeping system prompt and last ${maxMessages -1} messages.");
              messagesToSend = [messages.first, ...messages.sublist(messages.length - (maxMessages - 1))];
         } else {
@@ -256,10 +268,22 @@ class ApiService {
       }
     } catch (e, stackTrace) {
         print("[ApiService] Error during stream request/processing: $e\n$stackTrace");
-        yield "Error: Failed to connect or process stream. $e";
+
+        // 提供更友好的错误消息，特别是针对网络问题
+        String errorMessage = "Error: Failed to connect or process stream.";
+
+        // 检查是否是网络连接问题
+        if (e.toString().contains("SocketException") ||
+            e.toString().contains("Failed host lookup")) {
+            errorMessage = "网络连接错误：无法连接到 AI 服务器。请检查您的网络连接，确保您可以访问 openrouter.ai。\n\n如果您在中国或其他地区，可能需要使用 VPN 或代理服务器。";
+        } else if (e.toString().contains("timed out")) {
+            errorMessage = "连接超时：服务器响应时间过长。请检查您的网络连接或稍后再试。";
+        }
+
+        yield errorMessage;
     } finally {
         client.close();
         print("[ApiService] Stream client closed.");
     }
   }
-} 
+}
